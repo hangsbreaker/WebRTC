@@ -1,5 +1,8 @@
 # WebRTC
 Web RTC
-1. [Tab Browser 1] Create Connection
-2. [Tab Browser 2] Peer B
-3. [Tab Browser 1] Peer A
+1. Open 2 Tabs / Browser
+2. [First Tab] Click Create Connection
+3. Copy String ID From Frist Tab
+4. [Second Tab] Paste String ID on Connection String text and click Connect To
+5. Copy String ID from Second Tab
+6. Back to First Tab then paste to Connection String text then click Connect To

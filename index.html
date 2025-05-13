@@ -5,73 +5,175 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document</title>
+    <style>
+        * {
+            padding: 0px;
+            margin: 0px;
+        }
+
+        body {
+            padding: 10px;
+        }
+
+        button {
+            padding: 3px 7px;
+        }
+
+        #qrcode canvas {
+            width: 100%;
+            max-width: 400px;
+            height: auto;
+        }
+    </style>
 </head>
 
 <body>
     <h1>WebRTC</h1>
-    <button type="button" onclick="peerA()">Create Connection</button><br>
-    <button type="button" onclick="answerPeerA()">Peer A</button>
-    <button type="button" onclick="peerB()">Peer B</button><br><br>
-    <textarea id="icecan"></textarea><br>
-    <div id="myicecan"></div><br>
-    <input type="text" id="message" /><br>
-    <button type="button" onclick="sendMessage()">Send Message</button><br><br>
-    <div id="res"></div>
+    <div id="wrapconnect">
+        <ol style="font-size:0.7rem;padding-left:10px;">
+            <li>Open 2 Tabs / Browser</li>
+            <li>[First Tab] Click Create Connection</li>
+            <li>Copy String ID From Frist Tab</li>
+            <li>[Second Tab] Paste String ID on Connection String text and click Connect To</li>
+            <li>Copy String ID from Second Tab</li>
+            <li>Back to First Tab then paste to Connection String text then click Connect To</li>
+        </ol><br>
+        <button type="button" onclick="createConnection()">Create Connection</button><br>
+        Connection String<br>
+        <textarea id="icecan" placeholder="Connection String"></textarea><br>
+        <button type="button" onclick="connect()">Connect to</button><br><br>
+        <div id="stringid" style="display:none;">
+            <div id="qrcode"></div>
+            String ID<br>
+            <textarea id="myicecan"></textarea><br>
+            <button type="button" onclick="copyID()">Copy ID</button><br>
+        </div>
+    </div>
+    <div id="wrapmessage" style="display:none;">
+        Message<br>
+        <input type="text" id="message" placeholder="Message" /><br>
+        <button type="button" onclick="sendMessage()">Send Message</button><br><br>
+        <div id="res"></div>
+    </div>
 
+    <script src="qrcode.min.js"></script>
     <script>
         const pc = new RTCPeerConnection();
         const dc = pc.createDataChannel("channel");
         let type = "";
-        function peerA() {
+        const _ = (id) => {
+            let el = {};
+            if (id.substr(0, 1) == "#") {
+                el = document.getElementById(id.substr(1, id.length));
+            } else if (id.substr(0, 1) == ".") {
+                el = document.querySelectorAll(id);
+            } else if (id.substr(0, 1) == "@") {
+                el = document.getElementsByName(id.substr(1, id.length));
+            }
+            if (!el) { console.warn(`Element ${id} not found`); }
+            return el;
+        }
+
+        function createConnection() {
             type = "A";
+            dc.onopen = e => {
+                console.log("Connection OPENED!!");
+                _("#wrapconnect").style.display = 'none';
+                _("#wrapmessage").style.display = 'block';
+            }
             dc.onmessage = e => {
                 console.log("Receive: " + e.data);
-                document.getElementById("res").innerHTML += 'Receive: ' + e.data + '<br>';
+                _("#res").innerHTML += 'Receive: ' + e.data + '<br>';
             }
-            dc.onopen = e => console.log("Connection OPENED!!");
 
             pc.onicecandidate = e => {
-                const desc = JSON.stringify(pc.localDescription);
+                const desc = JSON.stringify(pc.localDescription.sdp);
                 console.log("icecandidate: " + desc);
-                document.getElementById("myicecan").innerHTML = desc;
+                _("#stringid").style.display = 'block';
+                _("#myicecan").value = desc;
+                createQR(desc);
             };
             pc.createOffer().then(o => pc.setLocalDescription(o)).then(a => console.log("Set Successfully!"));
         }
 
-        function answerPeerA() {
-            const answer = JSON.parse(document.getElementById("icecan").value);
-            pc.setRemoteDescription(answer);
-        }
-
-        function peerB() {
-            type = "B";
-            const offer = JSON.parse(document.getElementById("icecan").value);
-            pc.onicecandidate = e => {
-                const desc = JSON.stringify(pc.localDescription);
-                console.log("icecandidate: " + desc);
-                document.getElementById("myicecan").innerHTML = desc;
-            };
-            pc.ondatachannel = e => {
-                pc.dc = e.channel;
-                pc.dc.onopen = e => console.log("Connection OPENED!!");
-                pc.dc.onmessage = e => {
-                    console.log("Receive: " + e.data);
-                    document.getElementById("res").innerHTML += 'Receive: ' + e.data + '<br>';
+        function connect() {
+            const rdecs = { "type": "", "sdp": "" };
+            const icecan = _("#icecan");
+            if (type == "A") {
+                // answer
+                rdecs.type = "answer";
+                rdecs.sdp = icecan.value.replaceAll('\\r', '\r').replaceAll('\\n', '\n').replaceAll('"', '');
+                pc.setRemoteDescription(rdecs);
+            } else if (icecan.value != "") {
+                // offer
+                type = "B";
+                rdecs.type = "offer";
+                rdecs.sdp = icecan.value.replaceAll('\\r', '\r').replaceAll('\\n', '\n').replaceAll('"', '');
+                pc.onicecandidate = e => {
+                    const desc = JSON.stringify(pc.localDescription.sdp);
+                    console.log("icecandidate: " + desc);
+                    _("#stringid").style.display = 'block';
+                    _("#myicecan").value = desc;
+                    createQR(desc);
+                };
+                pc.ondatachannel = e => {
+                    pc.dc = e.channel;
+                    pc.dc.onopen = e => {
+                        console.log("Connection OPENED!!");
+                        _("#wrapconnect").style.display = 'none';
+                        _("#wrapmessage").style.display = 'block';
+                    }
+                    pc.dc.onmessage = e => {
+                        console.log("Receive: " + e.data);
+                        _("#res").innerHTML += 'Receive: ' + e.data + '<br>';
+                    }
                 }
+                pc.setRemoteDescription(rdecs).then(a => console.log("Offer set!"))
+                pc.createAnswer().then(a => pc.setLocalDescription(a)).then(a => console.log("answer created"));
+            } else {
+                alert("Connection string not valid!");
             }
-            pc.setRemoteDescription(offer).then(a => console.log("Offer set!"))
-            pc.createAnswer().then(a => pc.setLocalDescription(a)).then(a => console.log("answer created"));
         }
 
         function sendMessage() {
-            const msg = document.getElementById("message");
+            const msg = _("#message");
             if (type == "A") {
                 dc.send(msg.value);
             } else if (type == "B") {
                 pc.dc.send(msg.value);
             }
-            document.getElementById("res").innerHTML += 'Me: ' + msg.value + '<br>';
+            _("#res").innerHTML += 'Me: ' + msg.value + '<br>';
             msg.value = '';
+        }
+
+        function createQR(str = '') {
+            _("#qrcode").innerHTML = '';
+            var qrcode = new QRCode("qrcode", {
+                text: str,
+                width: 400, height: 400,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        }
+
+        function isValidJSON(str) {
+            try {
+                JSON.parse(str);
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function copyID() {
+            let text = _("#myicecan").value;
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Copied');
+            }).catch(err => {
+                console.error('Failed to copy to clipboard: ', err);
+                alert('Failed to copy to clipboard');
+            });
         }
     </script>
 </body>

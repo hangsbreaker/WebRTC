@@ -24,10 +24,39 @@
             max-width: 400px;
             height: auto;
         }
+
+
+        #scanner-container {
+            display: none;
+            position: fixed;
+            top: 0px;
+            left: 0px;
+            width: 100%;
+            height: 100%;
+            margin: 0 auto;
+            background: #ffffff;
+        }
+
+        #video {
+            width: 100%;
+            height: 60%;
+            background-color: #000;
+        }
+
+        #result {
+            text-align: center;
+            font-size: 1.5em;
+            margin-top: 20px;
+        }
     </style>
 </head>
 
 <body>
+    <div id="scanner-container">
+        <video id="video"></video>
+        <button id="closescan">Close</button>
+        <div id="result"></div>
+    </div>
     <h1>WebRTC</h1>
     <div id="wrapconnect">
         <ol style="font-size:0.7rem;padding-left:10px;">
@@ -41,7 +70,8 @@
         <button type="button" onclick="createConnection()">Create Connection</button><br>
         Connection String<br>
         <textarea id="icecan" placeholder="Connection String"></textarea><br>
-        <button type="button" onclick="connect()">Connect to</button><br><br>
+        <button type="button" onclick="connect()">Connect to</button>
+        <button type="button" onclick="startScan()">Scan QR</button><br><br>
         <div id="stringid" style="display:none;">
             <div id="qrcode"></div>
             String ID<br>
@@ -56,8 +86,43 @@
         <div id="res"></div>
     </div>
 
+    <script src="zxing.js"></script>
     <script src="qrcode.min.js"></script>
     <script>
+        function startScan() {
+            _("#scanner-container").style.display = 'block';
+            const codeReader = new ZXing.BrowserQRCodeReader();
+            const resultContainer = document.getElementById("result");
+
+            resultContainer.textContent = "Memulai scanner...";
+
+            codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
+                if (result) {
+                    resultContainer.innerHTML = `QR Code ditemukan: <a href="${result.text}" target="_blank">${result.text}</a>`;
+                    // Untuk menghentikan scanner:
+                    codeReader.reset();
+                    _("#scanner-container").style.display = 'none';
+                    _("#result").innerHTML = '';
+                    _("#icecan").value = result.text;
+                    connect();
+                }
+                if (err && !(err instanceof ZXing.NotFoundException)) {
+                    console.error(err);
+                    resultContainer.textContent = "Error: " + err.message;
+                }
+            })
+                .then(() => console.log("Scanner berjalan"))
+                .catch(err => {
+                    console.error(err);
+                    resultContainer.textContent = "Tidak dapat mengakses kamera: " + err.message;
+                });
+            _("#closescan").addEventListener("click", () => {
+                codeReader.reset();
+                _("#scanner-container").style.display = 'none';
+                _("#result").innerHTML = '';
+            });
+        }
+
         const pc = new RTCPeerConnection();
         const dc = pc.createDataChannel("channel");
         let type = "";
